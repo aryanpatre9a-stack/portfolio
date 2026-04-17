@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Guess the Number</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --card: #1a1a28;
+    --accent: #e8ff47;
+    --accent2: #ff5c8d;
+    --accent3: #5cffcf;
+    --text: #f0f0f5;
+    --muted: #6b6b8a;
+    --border: rgba(232,255,71,0.15);
+    --glow: rgba(232,255,71,0.25);
+    --red-glow: rgba(255,92,141,0.3);
+    --green-glow: rgba(92,255,207,0.3);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow: hidden;
+  }
+
+  /* Animated grid bg */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(232,255,71,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(232,255,71,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    animation: gridShift 20s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  @keyframes gridShift {
+    0%   { background-position: 0 0; }
+    100% { background-position: 60px 60px; }
+  }
+
+  /* Floating orbs */
+  .orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+    animation: float 8s ease-in-out infinite;
+  }
+  .orb1 { width:340px;height:340px;background:rgba(232,255,71,0.07);top:-100px;right:-60px; animation-delay:0s; }
+  .orb2 { width:280px;height:280px;background:rgba(255,92,141,0.07);bottom:-80px;left:-60px; animation-delay:-3s; }
+  .orb3 { width:200px;height:200px;background:rgba(92,255,207,0.05);bottom:30%;right:10%; animation-delay:-5s; }
+
+  @keyframes float {
+    0%,100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(-30px) scale(1.05); }
+  }
+
+  /* Layout */
+  .wrapper {
+    position: relative; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    padding: 48px 44px;
+    width: 100%; max-width: 480px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.03) inset;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.4s;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.6;
+  }
+
+  /* Header */
+  .game-tag {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(232,255,71,0.08);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 14px;
+    font-size: 11px; letter-spacing: 0.15em;
+    color: var(--accent); text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .dot { width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 38px; font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    color: var(--muted); font-size: 13px; line-height: 1.6;
+    margin-bottom: 32px;
+  }
+
+  /* Range display */
+  .range-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 28px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+    font-size: 12px; color: var(--muted);
+    letter-spacing: 0.05em;
+  }
+  .range-val { color: var(--text); font-weight: 700; font-size: 14px; }
+
+  /* Tries display */
+  .tries-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 28px;
+  }
+  .tries-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .tries-pips { display: flex; gap: 5px; }
+  .pip {
+    width: 18px; height: 6px; border-radius: 99px;
+    background: rgba(255,255,255,0.08);
+    transition: background 0.3s, transform 0.2s;
+  }
+  .pip.used { background: var(--accent2); }
+  .pip.last { background: var(--accent); animation: pipPop 0.3s ease; }
+  @keyframes pipPop { 0%{transform:scaleX(1.4)} 100%{transform:scaleX(1)} }
+
+  /* Feedback message */
+  .feedback {
+    min-height: 56px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 14px;
+    margin-bottom: 24px;
+    font-family: 'Syne', sans-serif;
+    font-size: 17px; font-weight: 700;
+    letter-spacing: 0.01em;
+    text-align: center;
+    padding: 12px 20px;
+    border: 1px solid transparent;
+    transition: all 0.35s ease;
+    background: rgba(255,255,255,0.02);
+    color: var(--muted);
+  }
+  .feedback.far    { background:rgba(255,92,141,0.08); border-color:rgba(255,92,141,0.2); color:var(--accent2); }
+  .feedback.warm   { background:rgba(255,165,50,0.1);  border-color:rgba(255,165,50,0.25);  color:#ffaa33; }
+  .feedback.hot    { background:rgba(232,255,71,0.1);  border-color:rgba(232,255,71,0.3);  color:var(--accent); }
+  .feedback.win    { background:rgba(92,255,207,0.1);  border-color:rgba(92,255,207,0.3);  color:var(--accent3); }
+  .feedback.lose   { background:rgba(255,92,141,0.12); border-color:rgba(255,92,141,0.3);  color:var(--accent2); }
+
+  /* Input group */
+  .input-group {
+    display: flex; gap: 12px;
+    margin-bottom: 20px;
+  }
+  input[type="number"] {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 22px; font-weight: 700;
+    padding: 14px 18px;
+    outline: none;
+    transition: border-color 0.25s, box-shadow 0.25s;
+    -moz-animation: textfield;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input[type="number"]:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow);
+  }
+  input[type="number"]:disabled {
+    opacity: 0.3; cursor: not-allowed;
+  }
+
+  button.guess-btn {
+    background: var(--accent);
+    color: #0a0a0f;
+    border: none; border-radius: 12px;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px; font-weight: 800;
+    padding: 14px 22px;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+    white-space: nowrap;
+  }
+  button.guess-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px var(--glow);
+  }
+  button.guess-btn:active:not(:disabled) { transform: translateY(0); }
+  button.guess-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* History */
+  .history-label {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.12em;
+    margin-bottom: 10px;
+  }
+  .history-chips {
+    display: flex; flex-wrap: wrap; gap: 7px;
+    min-height: 32px;
+    margin-bottom: 24px;
+  }
+  .chip {
+    padding: 5px 12px; border-radius: 99px;
+    font-size: 12px; font-weight: 700;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: var(--muted);
+    animation: chipIn 0.25s ease;
+  }
+  .chip.hot   { border-color: rgba(232,255,71,0.4); color: var(--accent); }
+  .chip.warm  { border-color: rgba(255,165,50,0.4); color: #ffaa33; }
+  .chip.far   { border-color: rgba(255,92,141,0.3); color: var(--accent2); }
+  @keyframes chipIn {
+    from { opacity:0; transform: scale(0.7); }
+    to   { opacity:1; transform: scale(1); }
+  }
+
+  /* Restart */
+  button.restart-btn {
+    width: 100%;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    padding: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+    letter-spacing: 0.05em;
+  }
+  button.restart-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(232,255,71,0.05);
+  }
+
+  /* Big result overlay inside card */
+  .result-number {
+    font-family: 'Syne', sans-serif;
+    font-size: 72px; font-weight: 800;
+    text-align: center;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    margin-bottom: 10px;
+    animation: bigIn 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  .result-number.win  { color: var(--accent3); text-shadow: 0 0 40px var(--green-glow); }
+  .result-number.lose { color: var(--accent2); text-shadow: 0 0 40px var(--red-glow); }
+  @keyframes bigIn {
+    from { opacity:0; transform:scale(0.5) translateY(20px); }
+    to   { opacity:1; transform:scale(1) translateY(0); }
+  }
+
+  /* Shake animation for wrong guess */
+  @keyframes shake {
+    0%,100%{transform:translateX(0)}
+    20%{transform:translateX(-10px)}
+    40%{transform:translateX(10px)}
+    60%{transform:translateX(-7px)}
+    80%{transform:translateX(7px)}
+  }
+  .shake { animation: shake 0.4s ease; }
+
+  /* Screen sections */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* Hint arrow */
+  .hint-arrow {
+    display: none;
+    align-items: center; justify-content: center; gap: 8px;
+    font-size: 13px; color: var(--muted);
+    margin-bottom: 12px;
+    letter-spacing: 0.05em;
+    animation: fadeIn 0.3s ease;
+  }
+  .hint-arrow.show { display: flex; }
+  .arrow { font-size: 20px; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+
+  /* Stars celebration */
+  .confetti-container {
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 10;
+    overflow: hidden;
+  }
+  .confetti-piece {
+    position: absolute;
+    width: 10px; height: 10px;
+    border-radius: 2px;
+    top: -20px;
+    animation: confettiFall linear forwards;
+  }
+  @keyframes confettiFall {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+  }
+
+  /* Score stat */
+  .stats-row {
+    display: flex; gap: 12px;
+    margin-bottom: 24px;
+  }
+  .stat-box {
+    flex: 1;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+  }
+  .stat-box .val {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px; font-weight: 800;
+    color: var(--text);
+  }
+  .stat-box .lbl { font-size: 11px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb orb3"></div>
+<div class="confetti-container" id="confettiContainer"></div>
+
+<div class="wrapper">
+  <div class="card" id="gameCard">
+
+    <!-- GAME SCREEN -->
+    <div class="screen active" id="gameScreen">
+      <div class="game-tag"><span class="dot"></span> Number Game</div>
+      <h1>Guess the <span>Number</span></h1>
+      <p class="subtitle">I've picked a secret number between 1 and 100.<br>You have 10 tries. Can you crack it?</p>
+
+      <div class="range-bar">
+        <span>Range</span>
+        <span class="range-val">1 — 100</span>
+        <span id="lowHint">—</span>
+      </div>
+
+      <div class="tries-row">
+        <span class="tries-label">Attempts</span>
+        <div class="tries-pips" id="pips"></div>
+      </div>
+
+      <div class="feedback" id="feedback">Enter your first guess below ↓</div>
+
+      <div class="hint-arrow" id="hintArrow">
+        <span class="arrow" id="hintArrowSymbol">↑</span>
+        <span id="hintText">Go higher</span>
+      </div>
+
+      <div class="input-group">
+        <input type="number" id="guessInput" min="1" max="100" placeholder="??"/>
+        <button class="guess-btn" id="guessBtn" onclick="makeGuess()">GUESS</button>
+      </div>
+
+      <div class="history-label">Previous Guesses</div>
+      <div class="history-chips" id="historyChips"></div>
+    </div>
+
+    <!-- WIN/LOSE SCREEN -->
+    <div class="screen" id="resultScreen">
+      <div class="game-tag"><span class="dot"></span> <span id="resultTag">Result</span></div>
+      <div class="result-number" id="resultNumber"></div>
+      <div class="feedback" id="resultFeedback" style="margin-bottom:28px;"></div>
+
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="val" id="statGuesses">—</div>
+          <div class="lbl">Guesses</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statRemaining">—</div>
+          <div class="lbl">Left</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" id="statScore">—</div>
+          <div class="lbl">Score</div>
+        </div>
+      </div>
+
+      <div class="history-label">Your Guesses</div>
+      <div class="history-chips" id="resultChips" style="margin-bottom:28px;"></div>
+
+      <button class="restart-btn" onclick="restartGame()">↺ &nbsp; Play Again</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let target, guessCount, MAX_TRIES = 10, guesses = [];
+
+  function initGame() {
+    target = Math.floor(Math.random() * 100) + 1;
+    guessCount = 0;
+    guesses = [];
+    buildPips();
+    setFeedback('Enter your first guess below ↓', '');
+    document.getElementById('historyChips').innerHTML = '';
+    document.getElementById('hintArrow').classList.remove('show');
+    document.getElementById('lowHint').textContent = '—';
+    document.getElementById('guessInput').value = '';
+    document.getElementById('guessInput').disabled = false;
+    document.getElementById('guessBtn').disabled = false;
+    document.getElementById('guessInput').focus();
+  }
+
+  function buildPips() {
+    const container = document.getElementById('pips');
+    container.innerHTML = '';
+    for (let i = 0; i < MAX_TRIES; i++) {
+      const pip = document.createElement('div');
+      pip.className = 'pip';
+      pip.id = `pip${i}`;
+      container.appendChild(pip);
+    }
+  }
+
+  function setFeedback(msg, type) {
+    const el = document.getElementById('feedback');
+    el.className = 'feedback ' + type;
+    el.textContent = msg;
+  }
+
+  function getHeatClass(diff) {
+    if (diff <= 3)  return 'hot';
+    if (diff <= 8)  return 'warm';
+    return 'far';
+  }
+
+  function makeGuess() {
+    const input = document.getElementById('guessInput');
+    const val = parseInt(input.value);
+    if (isNaN(val) || val < 1 || val > 100) {
+      shakeCard(); return;
+    }
+
+    guessCount++;
+    guesses.push(val);
+
+    // Update pip
+    const pip = document.getElementById(`pip${guessCount - 1}`);
+    if (pip) {
+      pip.className = 'pip ' + (guessCount === MAX_TRIES ? 'last' : 'used');
+    }
+
+    const diff = Math.abs(val - target);
+    addChip(val, diff);
+    input.value = '';
+
+    if (val === target) {
+      endGame(true);
+      return;
+    }
+
+    if (guessCount >= MAX_TRIES) {
+      endGame(false);
+      return;
+    }
+
+    // Feedback
+    const arrow = document.getElementById('hintArrow');
+    const arrowSym = document.getElementById('hintArrowSymbol');
+    const hintTxt = document.getElementById('hintText');
+    arrow.classList.add('show');
+
+    if (val < target) {
+      arrowSym.textContent = '↑';
+      hintTxt.textContent = 'Go higher';
+    } else {
+      arrowSym.textContent = '↓';
+      hintTxt.textContent = 'Go lower';
+    }
+
+    const messages = {
+      hot:  ['🔥 Scorching hot!', '🔥 So close, burning up!', '⚡ Almost there!'],
+      warm: ['🌡️ Getting warmer...', '☀️ Warm — keep going!', '✨ You\'re close!'],
+      far:  ['🧊 Ice cold.', '❄️ That\'s far off.', '🌌 Long way to go.']
+    };
+    const heat = getHeatClass(diff);
+    const pool = messages[heat];
+    setFeedback(pool[Math.floor(Math.random() * pool.length)], heat);
+
+    // Update range hint
+    const low  = Math.min(...guesses);
+    const high = Math.max(...guesses);
+    document.getElementById('lowHint').textContent = `⬡ ${low} – ${high}`;
+
+    input.focus();
+  }
+
+  function addChip(val, diff) {
+    const heat = getHeatClass(diff);
+    const chip = document.createElement('div');
+    chip.className = `chip ${heat}`;
+    chip.textContent = val;
+    document.getElementById('historyChips').appendChild(chip);
+  }
+
+  function endGame(won) {
+    document.getElementById('guessInput').disabled = true;
+    document.getElementById('guessBtn').disabled = true;
+
+    setTimeout(() => {
+      showResult(won);
+    }, 500);
+  }
+
+  function showResult(won) {
+    document.getElementById('gameScreen').classList.remove('active');
+    document.getElementById('resultScreen').classList.add('active');
+
+    const rn = document.getElementById('resultNumber');
+    const rf = document.getElementById('resultFeedback');
+    const tag = document.getElementById('resultTag');
+
+    if (won) {
+      rn.textContent = '🎉';
+      rn.className = 'result-number win';
+      rf.className = 'feedback win';
+      rf.innerHTML = `You nailed it! The number was <strong>${target}</strong>.`;
+      tag.textContent = 'Victory!';
+      launchConfetti();
+    } else {
+      rn.textContent = target;
+      rn.className = 'result-number lose';
+      rf.className = 'feedback lose';
+      rf.innerHTML = `Out of guesses! The number was <strong>${target}</strong>.`;
+      tag.textContent = 'Game Over';
+    }
+
+    document.getElementById('statGuesses').textContent = guessCount;
+    document.getElementById('statRemaining').textContent = MAX_TRIES - guessCount;
+    const score = won ? Math.max(0, Math.round((MAX_TRIES - guessCount + 1) * 100 / MAX_TRIES * 10)) : 0;
+    document.getElementById('statScore').textContent = score;
+
+    // Populate chips in result
+    const rc = document.getElementById('resultChips');
+    rc.innerHTML = '';
+    guesses.forEach(g => {
+      const diff = Math.abs(g - target);
+      const chip = document.createElement('div');
+      chip.className = `chip ${getHeatClass(diff)}`;
+      chip.textContent = g;
+      rc.appendChild(chip);
+    });
+  }
+
+  function restartGame() {
+    document.getElementById('resultScreen').classList.remove('active');
+    document.getElementById('gameScreen').classList.add('active');
+    document.getElementById('confettiContainer').innerHTML = '';
+    initGame();
+  }
+
+  function shakeCard() {
+    const card = document.getElementById('gameCard');
+    card.classList.remove('shake');
+    void card.offsetWidth;
+    card.classList.add('shake');
+    card.addEventListener('animationend', () => card.classList.remove('shake'), { once: true });
+  }
+
+  function launchConfetti() {
+    const container = document.getElementById('confettiContainer');
+    const colors = ['#e8ff47','#ff5c8d','#5cffcf','#ffffff','#ffaa33','#a78bfa'];
+    for (let i = 0; i < 80; i++) {
+      const p = document.createElement('div');
+      p.className = 'confetti-piece';
+      p.style.cssText = `
+        left: ${Math.random() * 100}%;
+        background: ${colors[Math.floor(Math.random() * colors.length)]};
+        width: ${6 + Math.random() * 10}px;
+        height: ${6 + Math.random() * 10}px;
+        border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+        animation-duration: ${1.5 + Math.random() * 2}s;
+        animation-delay: ${Math.random() * 0.8}s;
+      `;
+      container.appendChild(p);
+    }
+    setTimeout(() => { container.innerHTML = ''; }, 4000);
+  }
+
+  // Enter key support
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      const guessBtn = document.getElementById('guessBtn');
+      if (!guessBtn.disabled) makeGuess();
+    }
+  });
+
+  initGame();
+</script>
+</body>
+</html>
